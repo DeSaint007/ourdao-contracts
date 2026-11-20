@@ -96,4 +96,6 @@ pub enum Error {
     TooManyOpenProposals = 90,
     /// A borrower cannot vote on their own loan proposal (#327).
     BorrowerCannotVote = 91,
+    /// An inbound token transfer delivered less than the requested amount (#283).
+    TransferAmountMismatch = 93,
 }
