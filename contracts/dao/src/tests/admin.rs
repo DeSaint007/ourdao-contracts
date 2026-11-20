@@ -881,10 +881,8 @@ fn token_add_and_remove_events_include_proposal_id_and_caller() {
     advance(&s.env, TIMELOCK_DURATION);
     s.client.execute_token_addition(&s.admin, &asset);
 
-    let add_event = s
-        .env
-        .events()
-        .all()
+    let add_events = s.env.events().all();
+    let add_event = add_events
         .events()
         .iter()
         .rev()
@@ -903,10 +901,8 @@ fn token_add_and_remove_events_include_proposal_id_and_caller() {
     assert!(matches!(&add_data[2], ScVal::Address(_)));
 
     s.client.remove_token(&s.admin, &asset);
-    let remove_event = s
-        .env
-        .events()
-        .all()
+    let remove_events = s.env.events().all();
+    let remove_event = remove_events
         .events()
         .iter()
         .rev()
