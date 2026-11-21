@@ -2,7 +2,7 @@ use soroban_sdk::{symbol_short, token, Address, Env, Vec};
 
 use crate::error::Error;
 use crate::storage::{self, extend_instance};
-use crate::types::{LoanPolicy, PendingPolicyUpdate, BASIS_POINTS};
+use crate::types::{LoanPolicy, PendingPolicyUpdate, BASIS_POINTS, MAX_WHITELISTED_TOKENS};
 use crate::util;
 
 /// Timelock delay between proposing and executing a policy update (48 hours in seconds).
@@ -281,13 +281,18 @@ pub fn propose_token_addition(env: &Env, caller: Address, token: Address) -> Res
     if storage::is_token_whitelisted(env, &token) {
         return Err(Error::TokenAlreadyWhitelisted);
     }
+    if storage::get_whitelisted_tokens(env).len() >= MAX_WHITELISTED_TOKENS {
+        return Err(Error::WhitelistFull);
+    }
     validate_token(env, &token)?;
     let execution_time = env.ledger().timestamp() + TIMELOCK_DURATION;
+    let proposal_id = storage::next_token_proposal_id(env);
     storage::set_pending_token_addition(env, &token, execution_time);
+    storage::set_token_proposal_id(env, &token, proposal_id);
     extend_instance(env);
     env.events().publish(
         (symbol_short!("tok_prop"),),
-        (caller, token, execution_time),
+        (proposal_id, caller, token, execution_time),
     );
     Ok(())
 }
@@ -302,11 +307,15 @@ pub fn execute_token_addition(env: &Env, caller: Address, token: Address) -> Res
     if env.ledger().timestamp() < execution_time {
         return Err(Error::TimelockNotExpired);
     }
+    if storage::get_whitelisted_tokens(env).len() >= MAX_WHITELISTED_TOKENS {
+        return Err(Error::WhitelistFull);
+    }
+    let proposal_id = storage::get_token_proposal_id(env, &token).unwrap_or(0);
     storage::remove_pending_token_addition(env, &token);
     storage::set_token_whitelisted(env, &token, true);
     extend_instance(env);
     env.events()
-        .publish((symbol_short!("tok_add"),), (caller, token));
+        .publish((symbol_short!("tok_add"),), (proposal_id, caller, token));
     Ok(())
 }
 
@@ -323,10 +332,11 @@ pub fn remove_token(env: &Env, caller: Address, token: Address) -> Result<(), Er
     if !storage::is_token_whitelisted(env, &token) {
         return Err(Error::TokenNotWhitelisted);
     }
+    let proposal_id = storage::get_token_proposal_id(env, &token).unwrap_or(0);
     storage::set_token_whitelisted(env, &token, false);
     extend_instance(env);
     env.events()
-        .publish((symbol_short!("tok_rem"),), (caller, token));
+        .publish((symbol_short!("tok_rem"),), (proposal_id, caller, token));
     Ok(())
 
 /// Try to execute a pending policy update, if the timelock has expired and the
